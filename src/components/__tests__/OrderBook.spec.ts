@@ -2,8 +2,14 @@ import {
   describe, it, expect, beforeEach, vi,
 } from 'vitest';
 import { mount } from '@vue/test-utils';
+import type { ComponentPublicInstance } from 'vue';
 import OrderBook from '@/components/OrderBook.vue';
 import { createWebSocketService } from '@/services/websocket';
+import type { WebSocketService } from '@/types/websocket';
+
+interface OrderBookInstance extends ComponentPublicInstance {
+  ws: WebSocketService;
+}
 
 vi.mock('@/services/websocket', () => ({
   createWebSocketService: vi.fn(() => ({
@@ -97,7 +103,7 @@ describe('OrderBook.vue', () => {
     expect(createWebSocketService).toHaveBeenCalled();
 
     wrapper.unmount();
-    expect(wrapper.vm.ws.disconnect).toHaveBeenCalled();
+    expect((wrapper.vm as OrderBookInstance).ws.disconnect).toHaveBeenCalled();
   });
 });
 

@@ -1,5 +1,8 @@
 <template>
-  <div class="order-book">
+  <div
+    v-if="state.seqNum"
+    class="order-book"
+  >
     <h1 class="title">
       Order Book
     </h1>
