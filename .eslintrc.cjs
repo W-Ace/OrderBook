@@ -32,6 +32,7 @@ module.exports = {
     'no-unused-vars': 'off',
     'no-console': 'off',
     'no-debugger': 'off',
+    'no-plusplus': 'off',
     'no-param-reassign': 0,
     'linebreak-style': 0,
     'vue/no-v-html': 0,

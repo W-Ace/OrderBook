@@ -27,10 +27,8 @@
         </div>
         <div
           class="body-col size"
-          :class="{
-            'size-increase': isSizeIncrease(order.price, 'ask'),
-            'size-decrease': isSizeDecrease(order.price, 'ask')
-          }"
+          :key="`size-${order.price}-${order.size}`"
+          :class="getSizeChangeClass(order.price, 'ask')"
         >
           {{ formatNumber(order.size) }}
         </div>
@@ -66,10 +64,8 @@
         </div>
         <div
           class="body-col size"
-          :class="{
-            'size-increase': isSizeIncrease(order.price, 'bid'),
-            'size-decrease': isSizeDecrease(order.price, 'bid')
-          }"
+          :key="`size-${order.price}-${order.size}`"
+          :class="getSizeChangeClass(order.price, 'bid')"
         >
           {{ formatNumber(order.size) }}
         </div>
@@ -100,7 +96,6 @@ import type {
   SizeChangeMap,
 } from '@/types/orderbook';
 
-const ANIMATION_DURATION = 1000;
 const DEPTH_LEVELS = 50;
 const MAX_DISPLAY = 8;
 
@@ -126,7 +121,7 @@ const priceClass = computed(() => {
   return 'price-same';
 });
 
-const formatNumber = (num: number): string => num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const formatNumber = (num: number): string => num?.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 const calculateTotals = (
   orders: [number, number][],
@@ -216,17 +211,15 @@ const updateOrderBook = (wsData: OrderBookData): void => {
   data.asks.forEach(([priceStr, sizeStr]) => {
     const price = parseFloat(priceStr);
     const size = parseFloat(sizeStr);
-    const timestamp = Date.now();
 
     if (size === 0) {
       asksMap.delete(price);
     } else {
       if (!currentPrices.has(price)) {
-        priceChanges.value.set(price, { side: 'ask', timestamp });
+        priceChanges.value.set(price, { side: 'ask' });
       } else if (asksMap.get(price) !== size) {
         sizeChanges.value.set(price, {
           prevSize: asksMap.get(price) ?? 0,
-          timestamp,
           side: 'ask',
         });
       }
@@ -237,17 +230,15 @@ const updateOrderBook = (wsData: OrderBookData): void => {
   data.bids.forEach(([priceStr, sizeStr]) => {
     const price = parseFloat(priceStr);
     const size = parseFloat(sizeStr);
-    const timestamp = Date.now();
 
     if (size === 0) {
       bidsMap.delete(price);
     } else {
       if (!currentPrices.has(price)) {
-        priceChanges.value.set(price, { side: 'bid', timestamp });
+        priceChanges.value.set(price, { side: 'bid' });
       } else if (bidsMap.get(price) !== size) {
         sizeChanges.value.set(price, {
           prevSize: bidsMap.get(price) ?? 0,
-          timestamp,
           side: 'bid',
         });
       }
@@ -266,53 +257,43 @@ const updateOrderBook = (wsData: OrderBookData): void => {
   );
 
   state.value.seqNum = data.seqNum;
+
+  const newPrices = new Set([
+    ...Array.from(asksMap.keys()),
+    ...Array.from(bidsMap.keys()),
+  ]);
+
+  priceChanges.value.forEach((_, price) => {
+    if (!newPrices.has(price)) {
+      priceChanges.value.delete(price);
+    }
+  });
+
+  sizeChanges.value.forEach((_, price) => {
+    if (!newPrices.has(price)) {
+      sizeChanges.value.delete(price);
+    }
+  });
 };
 
 const isNewOrder = (price: number, side: OrderSide): boolean => {
   const change = priceChanges.value.get(price);
   if (!change) return false;
 
-  const isExpired = Date.now() - change.timestamp > ANIMATION_DURATION;
-  if (isExpired) {
-    priceChanges.value.delete(price);
-    return false;
-  }
-
   return change.side === side;
 };
 
-const isSizeIncrease = (price: number, side: OrderSide): boolean => {
+const getSizeChangeClass = (price: number, side: OrderSide): string => {
   const change = sizeChanges.value.get(price);
-  if (!change) return false;
-
-  const isExpired = Date.now() - change.timestamp > ANIMATION_DURATION;
-  if (isExpired) {
-    sizeChanges.value.delete(price);
-    return false;
-  }
+  if (!change || change.side !== side) return '';
 
   const order = side === 'ask'
     ? state.value.asks.find((o) => o.price === price)
     : state.value.bids.find((o) => o.price === price);
 
-  return change.side === side && Boolean(order && order.size > change.prevSize);
-};
+  if (!order) return '';
 
-const isSizeDecrease = (price: number, side: OrderSide): boolean => {
-  const change = sizeChanges.value.get(price);
-  if (!change) return false;
-
-  const isExpired = Date.now() - change.timestamp > ANIMATION_DURATION;
-  if (isExpired) {
-    sizeChanges.value.delete(price);
-    return false;
-  }
-
-  const order = side === 'ask'
-    ? state.value.asks.find((o) => o.price === price)
-    : state.value.bids.find((o) => o.price === price);
-
-  return change.side === side && Boolean(order && order.size < change.prevSize);
+  return order.size > change.prevSize ? 'size-increase' : 'size-decrease';
 };
 
 const updateLastPrice = (newPrice: number): void => {

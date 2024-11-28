@@ -41,9 +41,8 @@ export type OrderBookState = {
 }
 
 export type OrderSide = 'ask' | 'bid'
-export type PriceChangeMap = Map<number, { side: OrderSide; timestamp: number }>
+export type PriceChangeMap = Map<number, { side: OrderSide }>
 export type SizeChangeMap = Map<number, {
   prevSize: number
-  timestamp: number
   side: OrderSide
 }>

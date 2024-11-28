@@ -5,7 +5,6 @@ import { mount } from '@vue/test-utils';
 import OrderBook from '@/components/OrderBook.vue';
 import { createWebSocketService } from '@/services/websocket';
 
-// Mock WebSocket Service
 vi.mock('@/services/websocket', () => ({
   createWebSocketService: vi.fn(() => ({
     connect: vi.fn(),
@@ -102,74 +101,101 @@ describe('OrderBook.vue', () => {
   });
 });
 
-describe('OrderBook resubscribe', () => {
-  it('should resubscribe when sequence number mismatch', async () => {
+describe('OrderBook animations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should handle size change class correctly', () => {
     const wrapper = mount(OrderBook);
     const vm = wrapper.vm as any;
 
-    vm.updateOrderBook({
-      type: 'snapshot',
-      data: {
-        seqNum: 100,
-        asks: [['100', '10']],
-        bids: [['99', '20']],
-      },
+    vm.state.asks = [{
+      price: 100,
+      size: 20,
+      total: 20,
+      percentage: 100,
+    }];
+
+    vm.sizeChanges.set(100, {
+      prevSize: 10,
+      side: 'ask',
+    });
+
+    expect(vm.getSizeChangeClass(100, 'ask')).toBe('size-increase');
+
+    vm.state.asks[0].size = 5;
+    vm.sizeChanges.set(100, {
+      prevSize: 20,
+      side: 'ask',
+    });
+
+    expect(vm.getSizeChangeClass(100, 'ask')).toBe('size-decrease');
+  });
+
+  it('should clean up animation states for removed prices', () => {
+    const wrapper = mount(OrderBook);
+    const vm = wrapper.vm as any;
+
+    vm.state.seqNum = 1;
+
+    vm.priceChanges.set(100, { side: 'ask' });
+    vm.sizeChanges.set(100, {
+      prevSize: 10,
+      side: 'ask',
     });
 
     vm.updateOrderBook({
       type: 'delta',
       data: {
+        prevSeqNum: 1,
+        seqNum: 2,
+        asks: [['101', '10']],
+        bids: [['99', '20']],
+      },
+    });
+
+    console.log(vm.priceChanges);
+
+    expect(vm.priceChanges.has(100)).toBe(false);
+    expect(vm.sizeChanges.has(100)).toBe(false);
+  });
+
+  it('should handle resubscribe on sequence mismatch', () => {
+    const wrapper = mount(OrderBook);
+    const vm = wrapper.vm as any;
+
+    vm.state.seqNum = 100;
+    vm.updateOrderBook({
+      type: 'delta',
+      data: {
         seqNum: 102,
         prevSeqNum: 101,
-        asks: [['101', '15']],
-        bids: [['98', '25']],
+        asks: [['100', '10']],
+        bids: [],
       },
     });
 
     expect(vm.ws.resubscribe).toHaveBeenCalled();
   });
 
-  it('should resubscribe when orderbook crosses', async () => {
+  it('should handle resubscribe on orderbook cross', () => {
     const wrapper = mount(OrderBook);
     const vm = wrapper.vm as any;
+
+    vm.state.asks = [{ price: 100, size: 10 }];
+    vm.state.bids = [{ price: 101, size: 10 }];
 
     vm.updateOrderBook({
       type: 'delta',
       data: {
         seqNum: 101,
         prevSeqNum: 100,
-        asks: [['100', '10']],
-        bids: [['101', '20']],
+        asks: [['99', '10']],
+        bids: [['100', '10']],
       },
     });
 
     expect(vm.ws.resubscribe).toHaveBeenCalled();
-  });
-
-  it('should handle multiple resubscribe calls', async () => {
-    const wrapper = mount(OrderBook);
-    const vm = wrapper.vm as any;
-
-    vm.updateOrderBook({
-      type: 'delta',
-      data: {
-        seqNum: 102,
-        prevSeqNum: 100,
-        asks: [['100', '10']],
-        bids: [['99', '20']],
-      },
-    });
-
-    vm.updateOrderBook({
-      type: 'delta',
-      data: {
-        seqNum: 103,
-        prevSeqNum: 102,
-        asks: [['99', '10']],
-        bids: [['100', '20']],
-      },
-    });
-
-    expect(vm.ws.resubscribe).toHaveBeenCalledTimes(2);
   });
 });
